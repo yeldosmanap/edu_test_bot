@@ -1,68 +1,80 @@
 import asyncio
+
+import dotenv
+import psycopg2.pool
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-TOKEN = '6519674458:AAHGTFRO6JKuh2czJc8WGgP9zXR7RHaMC8Y'
-bot = Bot(token=TOKEN)
+from buttons import keyboard, backButtonMenuKeyboard, subjects
+from variables import DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT, BOT_TOKEN
+
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-helpButton = KeyboardButton(text='Help')
-startTestButton = KeyboardButton(text='Start test')
-keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, keyboard=[[helpButton, startTestButton]])
+connection_pool = psycopg2.pool.SimpleConnectionPool(
+    1, 20,
+    database=DATABASE_NAME,
+    user=DATABASE_USER,
+    password=DATABASE_PASSWORD,
+    host=DATABASE_HOST,
+    port=DATABASE_PORT
+)
+print("Connected to database successfully")
 
-backButtonMenu = KeyboardButton(text='Back to menu')
-# Welcome message
+
 @dp.message(CommandStart())
-async def welcome(message: types.Message) -> None:
+async def start_handler(message: types.Message):
     username = message.from_user.username
-    await message.answer(f'Welcome @{username} to our Telegram Bot for education!', reply_markup=keyboard)
+    conn = connection_pool.getconn()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT u.username FROM users u WHERE u.username = %s;", (username,))
+        usernameInDb = cur.fetchone()
+
+        if usernameInDb is not None:
+            await message.answer(f'Welcome back @{username}!', reply_markup=keyboard)
+            return
+        else:
+            cur.execute("INSERT INTO users (username, date_signed_in) VALUES (%s, CURRENT_TIMESTAMP);", (username,))
+            conn.commit()
+            await message.answer(f'Welcome @{username} to our Telegram Bot for education!', reply_markup=keyboard)
+    finally:
+        cur.close()
+        connection_pool.putconn(conn)
 
 
 @dp.message()
-async def select(message: types.Message) -> None:
+async def select(message: types.Message):
     if message.text == 'Help':
         await message.answer(
             '''This bot is designed to help you learn and test your knowledge in different subjects. To get started, 
             simply select the subject you would like to study or test from the menu below.''')
     elif message.text == 'Start test':
-        await start_test(message)
+        await start_test_handler(message)
 
 
-# Help menu
 @dp.message(Command('help'))
-async def help(message: types.Message):
+async def help_handler(message: types.Message):
     await message.answer(
         '''This bot is designed to help you learn and test your knowledge in different subjects. To get started, 
         simply select the subject you would like to study or test from the menu below.''',
-        reply_markup=ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, keyboard=[[backButtonMenu]]))
+        reply_markup=backButtonMenuKeyboard)
 
 
-# Start test menu
 @dp.message(Command('start_test'))
-async def start_test(message: types.Message):
-    # Create a keyboard with the different subjects to choose from
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add('Computer Science')
-    keyboard.add('Mathematics')
-    keyboard.add('English')
-    keyboard.add('Physics')
-
-    # Send the keyboard to the user
-    await message.answer('Please select the subject you would like to test:', reply_markup=keyboard)
+async def start_test_handler(message: types.Message):
+    # Select a subject to test
+    await message.answer('Please select the subject you would like to test:', reply_markup=subjects)
 
 
-# Statistics menu
-@dp.message(Command('statistics'))
-async def statistics(message: types.Message):
-    # Create a keyboard with the different subjects to choose from
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add('Computer Science')
-    keyboard.add('Mathematics')
-    keyboard.add('English')
-    keyboard.add('Physics')
+async def main(bot_to_start):
+    await dp.start_polling(bot_to_start)
+    try:
+        await asyncio.sleep(2)
+    finally:
+        await dp.stop_polling()
 
-    await message.answer('Please select the subject you would like to see your statistics for:', reply_markup=keyboard)
 
 if __name__ == '__main__':
-    asyncio.run(dp.start_polling(bot))
+    asyncio.run(main(bot))
