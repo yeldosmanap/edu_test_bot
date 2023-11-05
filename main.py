@@ -1,15 +1,24 @@
 import asyncio
+import logging
 
-import dotenv
 import psycopg2.pool
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart, Command
+from aiogram import Bot, Dispatcher
+from aiogram.filters import StateFilter
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 
-from buttons import keyboard, backButtonMenuKeyboard, subjects
-from variables import DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT, BOT_TOKEN
+import handlers
+from config import DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT, BOT_TOKEN
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+
+class Form(StatesGroup):
+    START_TEST = State()
+    SUBJECT = State()
+    QUESTIONS = State()
+    ANSWER = State()
+
+
+subject_filter = StateFilter(Form.SUBJECT)
 
 connection_pool = psycopg2.pool.SimpleConnectionPool(
     1, 20,
@@ -22,59 +31,23 @@ connection_pool = psycopg2.pool.SimpleConnectionPool(
 print("Connected to database successfully")
 
 
-@dp.message(CommandStart())
-async def start_handler(message: types.Message):
-    username = message.from_user.username
-    conn = connection_pool.getconn()
-    cur = conn.cursor()
+async def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    )
 
-    try:
-        cur.execute("SELECT u.username FROM users u WHERE u.username = %s;", (username,))
-        usernameInDb = cur.fetchone()
+    bot = Bot(token=BOT_TOKEN)
+    dp = Dispatcher(storage=MemoryStorage())
 
-        if usernameInDb is not None:
-            await message.answer(f'Welcome back @{username}!', reply_markup=keyboard)
-            return
-        else:
-            cur.execute("INSERT INTO users (username, date_signed_in) VALUES (%s, CURRENT_TIMESTAMP);", (username,))
-            conn.commit()
-            await message.answer(f'Welcome @{username} to our Telegram Bot for education!', reply_markup=keyboard)
-    finally:
-        cur.close()
-        connection_pool.putconn(conn)
-
-
-@dp.message()
-async def select(message: types.Message):
-    if message.text == 'Help':
-        await message.answer(
-            '''This bot is designed to help you learn and test your knowledge in different subjects. To get started, 
-            simply select the subject you would like to study or test from the menu below.''')
-    elif message.text == 'Start test':
-        await start_test_handler(message)
-
-
-@dp.message(Command('help'))
-async def help_handler(message: types.Message):
-    await message.answer(
-        '''This bot is designed to help you learn and test your knowledge in different subjects. To get started, 
-        simply select the subject you would like to study or test from the menu below.''',
-        reply_markup=backButtonMenuKeyboard)
-
-
-@dp.message(Command('start_test'))
-async def start_test_handler(message: types.Message):
-    # Select a subject to test
-    await message.answer('Please select the subject you would like to test:', reply_markup=subjects)
-
-
-async def main(bot_to_start):
-    await dp.start_polling(bot_to_start)
+    dp.include_router(handlers.router)
+    await dp.start_polling(bot)
     try:
         await asyncio.sleep(2)
     finally:
         await dp.stop_polling()
+        await bot.session.close()
 
 
 if __name__ == '__main__':
-    asyncio.run(main(bot))
+    asyncio.run(main())

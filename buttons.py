@@ -1,26 +1,21 @@
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 
 print('Initializing buttons...')
-# Create a keyboard with a help button and a start test button
-helpButton = KeyboardButton(text='Help')
-startTestButton = KeyboardButton(text='Start test')
-keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, keyboard=[[helpButton, startTestButton]])
+# Main menu keyboard
+helpButton = KeyboardButton(text='Help', callback_data='help')
+startTestButton = KeyboardButton(text='Start test', callback_data='start_test')
+keyboard = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[helpButton, startTestButton]])
 
-# Create a keyboard with a button to go back to the menu
-backButtonMenu = KeyboardButton(text='Back to menu')
-backButtonMenuKeyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, keyboard=[[backButtonMenu]])
+# Back to menu button
+backButtonMenuKeyboard = InlineKeyboardMarkup(resize_keyboard=True, inline_keyboard=[[
+    InlineKeyboardButton(text='Back to menu', callback_data='back_to_menu')
+]])
 
-# Create a keyboard with the different subjects to choose from
-subjects = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True, keyboard=[[]])
-
-# Create buttons
-computer_science_button = KeyboardButton(text='Computer Science', callback_data='computer_science')
-mathematics_button = KeyboardButton(text='Mathematics', callback_data='mathematics')
-english_button = KeyboardButton(text='English', callback_data='english')
-physics_button = KeyboardButton(text='Physics', callback_data='physics')
-
-# Add buttons to the keyboard
-subjects.keyboard.append([computer_science_button])
-subjects.keyboard.append([mathematics_button])
-subjects.keyboard.append([english_button])
-subjects.keyboard.append([physics_button])
+# Subjects keyboard with 4 buttons for each subject
+subjects = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[
+    KeyboardButton(text='Computer Science', callback_data='computer_science'),
+    KeyboardButton(text='Mathematics', callback_data='mathematics'),
+    KeyboardButton(text='English', callback_data='english'),
+    KeyboardButton(text='Physics', callback_data='physics'),
+    KeyboardButton(text='Go menu', callback_data='start'),
+]])
